@@ -1,0 +1,11 @@
+﻿TOPIC
+	about_VMDeploy.Orchestrator
+	
+SHORT DESCRIPTION
+	Explains how to use the VMDeploy.Orchestrator powershell module
+	
+LONG DESCRIPTION
+	<Insert Content here>
+
+KEYWORDS
+	VMDeploy.Orchestrator
