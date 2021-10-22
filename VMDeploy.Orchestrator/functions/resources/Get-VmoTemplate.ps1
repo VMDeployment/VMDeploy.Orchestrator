@@ -32,7 +32,10 @@
     )
 
     process {
-        $userRoles = Get-UserRole -NoCache:$NoCache
-        Get-VMManConfiguration -Type Template | Where-Object Role -in $userRoles | Where-Object Name -like $Name
+		$userRoles = Get-UserRole -NoCache:$NoCache
+		Get-VMManConfiguration -Type Template | Where-Object {
+			$_.Role -in $userRoles -or
+			$userRoles -contains 'admins'
+		} | Where-Object Name -like $Name
     }
 }

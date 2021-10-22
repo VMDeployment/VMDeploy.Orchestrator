@@ -25,6 +25,9 @@
 
     process {
         $userRoles = Get-UserRole -NoCache:$NoCache
-        Get-VMManConfiguration -Type Network | Where-Object Role -in $userRoles
-    }
+        Get-VMManConfiguration -Type Network | Where-Object {
+			$_.Role -in $userRoles -or
+			$userRoles -contains 'admins'
+		}
+	}
 }

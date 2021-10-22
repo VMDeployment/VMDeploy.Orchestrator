@@ -1,94 +1,213 @@
 ﻿function New-VmoVirtualMachine {
-    [CmdletBinding(DefaultParameterSetName = 'Default')]
-    param (
-        [Parameter(Mandatory = $true)]
-        [string]
-        $Name,
-
-        [PsfArgumentCompleter('VMDeploy.Orchestrator.Template')]
-        [string]
-        $Template,
-
-        [PsfArgumentCompleter('VMDeploy.Orchestrator.HardwareProfile')]
-        [string]
-        $HardwareProfile,
-
-        [PsfArgumentCompleter('VMDeploy.Orchestrator.GuestOSProfile')]
-        [string]
-        $GuestOSProfile,
-
-        [Parameter(ParameterSetName = 'Cloud')]
-        [PsfArgumentCompleter('VMDeploy.Orchestrator.Cloud')]
-        [string]
-        $Cloud,
-
-        [Parameter(ParameterSetName = 'HostGroup')]
-        [PsfArgumentCompleter('VMDeploy.Orchestrator.HostGroup')]
-        [string]
-        $VMHostGroup,
-
-        [PsfArgumentCompleter('VMDeploy.Orchestrator.Host')]
-        [string]
-        $VMHost,
-
-        [PsfArgumentCompleter('VMDeploy.Orchestrator.VMDisk')]
-        [string]
-        $DiskName,
-
-        [PsfArgumentCompleter('VMDeploy.Orchestrator.Network')]
-        [string]
-        $Network,
-
-        [PsfArgumentCompleter('VMDeploy.Orchestrator.DNSServer')]
-        [string[]]
-        $DNSServer
-    )
-
-    process {
-        $configParam = @{ }
-
-        #region Process Template
-        $templateObject = Get-VmoTemplate -Name $Template | Microsoft.PowerShell.Utility\Select-Object -First 1
-        # Hardware Profile
-        if (-not $HardwareProfile) { $HardwareProfile = $templateObject.HardwareProfile }
-        if (-not $HardwareProfile) { throw "Hardware profile not specified! Use a template or specify the -HardwareProfile parameter!" }
-        # Guest OS Profile
-        if (-not $GuestOSProfile) { $GuestOSProfile = $templateObject.GuestOSProfile }
-        if (-not $GuestOSProfile) { throw "Guest OS profile not specified! Use a template or specify the -GuestOSProfile parameter!" }
-        # Cloud / VM Host Group
-        if (-not $Cloud -and -not $VMHostGroup) {
-            if ($templateObject.Cloud) { $Cloud = $templateObject.Cloud }
-            elseif ($templateObject.VMHostGroup) { $VMHostGroup = $templateObject.VMHostGroup }
-        }
-        if (-not $Cloud -and -not $VMHostGroup) { throw "Neither Cloud nor VM Host Group specified! Use a template that defines them or manually offer either as parameter!" }
-        #endregion Process Template
-    
-        #region Retrieve and validate resource access
-        $hwProfile = Get-VmoHardwareProfile -NoCache | Where-Object Name -EQ $HardwareProfile
-        if (-not $hwProfile) { throw "Unable to find Hardware Profile $hwProfile! Ensure it exists and you have the permission to use it." }
-        $osProfile = Get-VmoGuestOSProfile | Where-Object Name -EQ $GuestOSProfile
-        if (-not $osProfile) { throw "Unable to find Guest OS Profile $osProfile! Ensure it exists and you have the permission to use it." }
-        if ($Cloud) {
-            $cloudObject = Get-VmoCloud | Where-Object Name -EQ $Cloud
-            if (-not $cloudObject) { throw "Unable to find cloud $Cloud! Ensure it exists and you have the permission to use it." }
-            $configParam.Cloud = $cloudObject
-        }
-        if ($VMHostGroup) {
-            $hostGroupObject = Get-VmoVMHostGroup | Where-Object Name -EQ $VMHostGroup
-            if (-not $hostGroupObject) { throw "Unable to find VMHostGroup $VMHostGroup! Ensure it exists and you have the permission to use it." }
-            $configParam.VMHostGroup = $VMHostGroup
-        }
-
-        $vhdx = Get-VmoVirtualHardDisk | Where-Object Name -EQ $DiskName
-        if (-not $vhdx) { throw "Unable to find virtual hard disk $DiskName! Ensure it exists and you have the permission to use it." }
-        #endregion Retrieve and validate resource access
-
-        $seed = Get-Random
-        $jobGroup = [System.Guid]::NewGuid()
-        New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN 0 -JobGroup $jobGroup -CreateDiffDisk $false -VirtualHardDisk $vhdx -FileName "$($Name)_$($DiskName)" -VolumeType BootAndSystem
-    
-        $template = New-SCVMTemplate -Name "TMP_$($Name)_$($seed)" -HardwareProfile $hwProfile -GuestOSProfile $osProfile -JobGroup $jobGroup
-        $configuration = New-SCVMConfiguration -VMTemplate $template -Name "CFG_$($Name)_$($seed)" @configParam
-        New-SCVirtualMachine -VMConfiguration $configuration -Name $Name -StartVM -ReturnImmediately
-    }
+	[CmdletBinding(DefaultParameterSetName = 'Default')]
+	param (
+		[Parameter(Mandatory = $true)]
+		[string]
+		$Name,
+		
+		[PsfArgumentCompleter('VMDeploy.Orchestrator.Template')]
+		[string[]]
+		$Template,
+		
+		[PsfArgumentCompleter('VMDeploy.Orchestrator.HardwareProfile')]
+		[string]
+		$HardwareProfile,
+		
+		[PsfArgumentCompleter('VMDeploy.Orchestrator.GuestOSProfile')]
+		[string]
+		$GuestOSProfile,
+		
+		[Parameter(ParameterSetName = 'Cloud')]
+		[PsfArgumentCompleter('VMDeploy.Orchestrator.Cloud')]
+		[string]
+		$Cloud,
+		
+		[Parameter(ParameterSetName = 'HostGroup')]
+		[PsfArgumentCompleter('VMDeploy.Orchestrator.HostGroup')]
+		[string]
+		$VMHostGroup,
+		
+		[Parameter(ParameterSetName = 'Host')]
+		[PsfArgumentCompleter('VMDeploy.Orchestrator.Host')]
+		[string]
+		$VMHost,
+		
+		[PsfArgumentCompleter('VMDeploy.Orchestrator.VMDisk')]
+		[string]
+		$DiskName,
+		
+		[PsfArgumentCompleter('VMDeploy.Orchestrator.Network')]
+		[string]
+		$Network,
+		
+		[PsfArgumentCompleter('VMDeploy.Orchestrator.DNSServer')]
+		[string[]]
+		$DNSServer,
+		
+		[string]
+		$IPAddress,
+		
+		[string]
+		$SubnetMask,
+		
+		[string]
+		$DefaultGateway,
+		
+		[string]
+		$ComputerName,
+		
+		[string[]]
+		$GuestConfiguration
+	)
+	
+	begin {
+		#region Functions
+		function Resolve-Configuration {
+			[CmdletBinding()]
+			param (
+				[AllowEmptyCollection()]
+				[AllowEmptyString()]
+				[string[]]
+				$Name,
+				
+				[AllowNull()]
+				$Disks,
+				
+				[AllowNull()]
+				$Network,
+				
+				$BoundParameters
+			)
+			
+			$entries = Get-VmoGuestConfiguration | Where-Object Identity -In $Name | Microsoft.PowerShell.Utility\Select-Object -ExcludeProperty ConfigType -Property *
+			
+			foreach ($nameEntry in $Name | Where-Object { $_ -notin $entries.Identity }) {
+				Write-PSFMessage -Level Warning -String 'New-VmoVirtualMachine.GuestConfig.NotFound' -StringValues $nameEntry -FunctionName New-VmoVirtualMachine
+			}
+			foreach ($entry in $entries) {
+				foreach ($dependency in $entry.DependsOn) {
+					if ($entries.Identity -notcontains $dependency) {
+						Write-PSFMessage -Level Warning -String 'New-VmoVirtualMachine.GuestConfig.MissingDependency' -StringValues $entry.Identity, $dependency -FunctionName New-VmoVirtualMachine -Data @{ Entry = $entry }
+					}
+				}
+				if ($entry.Weight -lt 1) { $entry.Weight = 1 }
+			}
+			$entries
+			
+			foreach ($disk in $Disks) {
+				[PSCustomObject]@{
+					Identity = "__Disk_$($disk.Letter)_$($disk.LUN)"
+					Weight   = -1
+					Action   = 'disk'
+					Parameters = $disk
+				}
+			}
+			
+			$networkParam = @{ }
+			if ($Network.SubnetMask) { $networkParam.SubnetMask = $Network.SubnetMask }
+			if ($Network.DefaultGateway) { $networkParam.DefaultGateway = $Network.DefaultGateway }
+			if ($Network.DnsServer) { $networkParam.DnsServer = $Network.DnsServer }
+			if ($BoundParameters.SubnetMask) { $networkParam.SubnetMask = $BoundParameters.SubnetMask }
+			if ($BoundParameters.DefaultGateway) { $networkParam.DefaultGateway = $BoundParameters.DefaultGateway }
+			if ($BoundParameters.DnsServer) { $networkParam.DnsServer = $BoundParameters.DnsServer }
+			if ($BoundParameters.IPAddress) { $networkParam.IPAddress = $BoundParameters.IPAddress }
+			[PSCustomObject]@{
+				Identity = '__Network'
+				Weight   = -2
+				Action   = 'network'
+				Parameters = $networkParam
+			}
+		}
+		#endregion Functions
+	}
+	process {
+		$configParam = @{ }
+		
+		#region Process Template
+		$templateData = Resolve-TemplateData -Name $Template
+		# Hardware Profile
+		if (-not $HardwareProfile) { $HardwareProfile = $templateData.HardwareProfile }
+		if (-not $HardwareProfile) { throw "Hardware profile not specified! Use a template or specify the -HardwareProfile parameter!" }
+		# Guest OS Profile
+		if (-not $GuestOSProfile) { $GuestOSProfile = $templateData.GuestOSProfile }
+		if (-not $GuestOSProfile) { throw "Guest OS profile not specified! Use a template or specify the -GuestOSProfile parameter!" }
+		# Cloud / VM Host Group
+		if (-not $Cloud -and -not $VMHostGroup -and -not $VMHost) {
+			if ($templateData.Cloud) { $Cloud = $templateData.Cloud }
+			elseif ($templateData.VMHostGroup) { $VMHostGroup = $templateData.VMHostGroup }
+			elseif ($templateData.VMHost) { $VMHost = $templateData.VMHost }
+		}
+		if (-not $Cloud -and -not $VMHostGroup -and -not $VMHost) { throw "Neither Cloud nor VM Host Group nor VM Host specified! Use a template that defines them or manually offer either as parameter!" }
+		if (-not $DiskName) { $DiskName = $templateData.VirtualHardDisk }
+		if (-not $Network) { $Network = $templateData.Network }
+		
+		if (-not $ComputerName) { $ComputerName = $Name }
+		#endregion Process Template
+		
+		#region Retrieve and validate resource access
+		$hwProfile = Get-VmoHardwareProfile -NoCache | Where-Object Name -EQ $HardwareProfile
+		if (-not $hwProfile) { throw "Unable to find Hardware Profile $hwProfile! Ensure it exists and you have the permission to use it." }
+		$osProfile = Get-VmoGuestOSProfile | Where-Object Name -EQ $GuestOSProfile
+		if (-not $osProfile) { throw "Unable to find Guest OS Profile $osProfile! Ensure it exists and you have the permission to use it." }
+		if ($Cloud) {
+			$cloudObject = Get-VmoCloud | Where-Object Name -EQ $Cloud
+			if (-not $cloudObject) { throw "Unable to find cloud $Cloud! Ensure it exists and you have the permission to use it." }
+			$configParam.Cloud = $cloudObject
+		}
+		if ($VMHostGroup) {
+			$hostGroupObject = Get-VmoVMHostGroup | Where-Object Name -EQ $VMHostGroup
+			if (-not $hostGroupObject) { throw "Unable to find VMHostGroup $VMHostGroup! Ensure it exists and you have the permission to use it." }
+			$configParam.VMHostGroup = $VMHostGroup
+		}
+		$vmHostObject = $null
+		if ($VMHost) {
+			$hostObjects = Get-VmoVMHost
+			$vmHostObject = $hostObjects | Where-Object ID -EQ $VMHost
+			if (-not $vmHostObject) { $vmHostObject = $hostObjects | Where-Object FQDN -EQ $VMHost | Microsoft.PowerShell.Utility\Select-Object -First 1 }
+			if (-not $vmHostObject) { $vmHostObject = $hostObjects | Where-Object Name -EQ $VMHost | Microsoft.PowerShell.Utility\Select-Object -First 1 }
+			if (-not $vmHostObject) { $vmHostObject = $hostObjects | Where-Object ComputerName -EQ $VMHost | Microsoft.PowerShell.Utility\Select-Object -First 1 }
+			if (-not $vmHostObject) { throw "Unable to find VM Host $VMHost! Ensure it exists and you have the permission to use it." }
+		}
+		
+		$vhdx = Get-VmoVirtualHardDisk | Where-Object Name -EQ $DiskName
+		if (-not $vhdx) { throw "Unable to find virtual hard disk $DiskName! Ensure it exists and you have the permission to use it." }
+		
+		$networkData = Get-VmoNetwork | Where-Object Name -EQ $Network | Microsoft.PowerShell.Utility\Select-Object -First 1
+		#endregion Retrieve and validate resource access
+		
+		$seed = Get-Random
+		
+		$resolvedConfiguration = Resolve-Configuration -Name (@($templateData.GuestConfig) + $GuestConfiguration) -Disks $hwProfile._Disks -Network $networkData -BoundParameters $PSBoundParameters
+		$guestConfigData = New-ConfigurationVhdx -Seed $seed -Configuration $resolvedConfiguration
+		$guestConfigVhdx = Publish-ScvmmVhdx -GuestVhdxConfig $guestConfigData
+		
+		$jobGroup = [System.Guid]::NewGuid()
+		New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN 0 -JobGroup $jobGroup -CreateDiffDisk $false -VirtualHardDisk $vhdx -FileName "$($Name)_$($DiskName)" -VolumeType BootAndSystem
+		foreach ($disk in ($resolvedConfiguration | Where-Object Action -EQ disk).Parameters) {
+			New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN $disk.Lun -JobGroup $jobGroup -VirtualHardDiskFormatType VHDX -VirtualHardDiskSizeMB ($disk.Size / 1mb) -Dynamic -VolumeType None -FileName "$($seed)-$($Name)-$($disk.Letter).vhdx"
+		}
+		New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN (Get-PSFConfigValue -FullName 'VMDeploy.Orchestrator.GuestConfig.Disk.LunID') -JobGroup $jobGroup -CreateDiffDisk $false -VirtualHardDisk $guestConfigVhdx -FileName "$($Name)_$($guestConfigData.Name)" -VolumeType None
+		
+		$templateObject = New-SCVMTemplate -Name "TMP_$($Name)_$($seed)" -HardwareProfile $hwProfile -GuestOSProfile $osProfile -JobGroup $jobGroup
+		if (-not $vmHostObject) {
+			Write-PSFMessage -Message 'Deploying VM {0} to {1}{2}' -StringValues $Name, $cloudObject.Name, $hostGroupObject.Name
+			$configuration = New-SCVMConfiguration -VMTemplate $templateObject -Name "CFG_$($Name)_$($seed)" @configParam
+			New-SCVirtualMachine -VMConfiguration $configuration -Name $ComputerName -StartVM -ReturnImmediately
+		}
+		else {
+			$vmPath = $null
+			if ($vmHostObject._VMPaths) { $vmPath = $vmHostObject._VMPaths | Get-Random }
+			if (-not $vmPath) { $vmPath = $vmHostObject.VMPaths | Get-Random }
+			
+			Write-PSFMessage -Message 'Deploying VM {0} to {1} at {2}' -StringValues $Name, $vmHostObject.Name, $vmPath
+			New-SCVirtualMachine -VMTemplate $templateObject -VMHost $vmHostObject -Path $vmPath -Name $ComputerName -StartVM -ReturnImmediately
+		}
+		
+		
+		# Clean up old Templates & VHDXs
+		# Current Template is locked while deploying
+		$timeLimit = Get-PSFConfigValue -FullName 'VMDeploy.Orchestrator.Template.ExpirationDays'
+		$null = Get-SCVMTemplate | Where-Object Name -Like TMP_* | Where-Object AddedTime -LT (Get-Date).AddDays((-1 * $timeLimit)) | Remove-SCVMTemplate
+		$null = Get-SCVirtualHardDisk | Where-Object Name -like "VMDeploy_OSConfig-*.vhdx" | Where-Object AddedTime -lt (Get-Date).AddDays((-1 * $timeLimit)) | Remove-SCVirtualHardDisk
+	}
 }

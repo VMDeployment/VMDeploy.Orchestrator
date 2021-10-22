@@ -31,7 +31,7 @@
             $configItem = $config | Where-Object Name -EQ $vMHostGroup.Name | Microsoft.PowerShell.Utility\Select-Object -First 1
             if (-not $configItem) { Add-Member -InputObject $vMHostGroup -MemberType NoteProperty -Name _Role -Value 'Admins' -Force }
             else { Add-Member -InputObject $vMHostGroup -MemberType NoteProperty -Name _Role -Value $configItem.Role -Force }
-            if ($vMHostGroup._Role -notin $userRoles) { continue }
+            if ($vMHostGroup._Role -notin $userRoles -and $userRoles -notcontains 'admins') { continue }
             $vMHostGroup
         }
     }

@@ -31,7 +31,7 @@
             $configItem = $config | Where-Object Name -EQ $guestOSProfile.Name | Microsoft.PowerShell.Utility\Select-Object -First 1
             if (-not $configItem) { Add-Member -InputObject $guestOSProfile -MemberType NoteProperty -Name _Role -Value 'Admins' -Force }
             else { Add-Member -InputObject $guestOSProfile -MemberType NoteProperty -Name _Role -Value $configItem.Role -Force }
-            if ($guestOSProfile._Role -notin $userRoles) { continue }
+            if ($guestOSProfile._Role -notin $userRoles -and $userRoles -notcontains 'admins') { continue }
             $guestOSProfile
         }
     }

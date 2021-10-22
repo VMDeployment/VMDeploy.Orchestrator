@@ -25,6 +25,9 @@
 
     process {
         $userRoles = Get-UserRole -NoCache:$NoCache
-        Get-VMManConfiguration -Type DNSServer | Where-Object Role -in $userRoles
-    }
+        Get-VMManConfiguration -Type DNSServer | Where-Object {
+			$_.Role -in $userRoles -or
+			$userRoles -contains 'admins'
+		}
+	}
 }

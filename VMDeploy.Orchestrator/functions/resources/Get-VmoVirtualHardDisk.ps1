@@ -31,7 +31,7 @@
             $configItem = $config | Where-Object ImageName -EQ $virtualHardDisk.Name | Microsoft.PowerShell.Utility\Select-Object -First 1
             if (-not $configItem) { Add-Member -InputObject $virtualHardDisk -MemberType NoteProperty -Name _Role -Value 'Admins' -Force }
             else { Add-Member -InputObject $virtualHardDisk -MemberType NoteProperty -Name _Role -Value $configItem.Role -Force }
-            if ($virtualHardDisk._Role -notin $userRoles) { continue }
+            if ($virtualHardDisk._Role -notin $userRoles -and $userRoles -notcontains 'admins') { continue }
             $virtualHardDisk
         }
     }

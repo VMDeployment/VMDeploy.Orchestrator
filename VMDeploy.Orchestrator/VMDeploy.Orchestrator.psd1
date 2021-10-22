@@ -26,8 +26,9 @@
     # Modules that must be imported into the global environment prior to importing
     # this module
     RequiredModules   = @(
-        @{ ModuleName = 'PSFramework'; ModuleVersion = '1.6.198' }
-    )
+		@{ ModuleName = 'PSFramework'; ModuleVersion = '1.6.201' }
+		@{ ModuleName = 'VHDX'; ModuleVersion = '1.0.1' }
+	)
 	
     # Assemblies that must be loaded prior to importing this module
     # RequiredAssemblies = @('bin\VMDeploy.Orchestrator.dll')
@@ -42,12 +43,14 @@
     FunctionsToExport = @(
         'Get-VmoCloud'
         'Get-VmoDNSServer'
-        'Get-VmoDomain'
+		'Get-VmoDomain'
+		'Get-VmoGuestConfiguration'
         'Get-VmoGuestOSProfile'
         'Get-VmoHardwareProfile'
         'Get-VmoNetwork'
         'Get-VmoTemplate'
-        'Get-VmoVirtualHardDisk'
+		'Get-VmoVirtualHardDisk'
+		'Get-VmoVMHost'
         'Get-VmoVMHostGroup'
         'New-VmoVirtualMachine'
     )

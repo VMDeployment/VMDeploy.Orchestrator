@@ -31,7 +31,7 @@
             $configItem = $config | Where-Object Name -EQ $cloud.Name | Microsoft.PowerShell.Utility\Select-Object -First 1
             if (-not $configItem) { Add-Member -InputObject $cloud -MemberType NoteProperty -Name _Role -Value 'Admins' -Force }
             else { Add-Member -InputObject $cloud -MemberType NoteProperty -Name _Role -Value $configItem.Role -Force }
-            if ($cloud._Role -notin $userRoles) { continue }
+            if ($cloud._Role -notin $userRoles -and $userRoles -notcontains 'admins') { continue }
             $cloud
         }
     }
