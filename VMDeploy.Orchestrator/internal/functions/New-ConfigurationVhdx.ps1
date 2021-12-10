@@ -4,7 +4,10 @@
 		[string]
 		$Seed,
 		
-		$Configuration
+		$Configuration,
+		
+		[string]
+		$ComputerName
 	)
 	
 	begin {
@@ -116,6 +119,7 @@
 				continue
 			}
 		}
+		$ComputerName | Export-PSFClixml -Path "$workingDirectory\Resources\__computername.dat"
 		#endregion Process Configuration & Resources
 		
 		#region Wrapping up and reporting

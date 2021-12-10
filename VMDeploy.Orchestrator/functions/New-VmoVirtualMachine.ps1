@@ -47,8 +47,8 @@
 		[string]
 		$IPAddress,
 		
-		[string]
-		$SubnetMask,
+		[int]
+		$PrefixLength,
 		
 		[string]
 		$DefaultGateway,
@@ -81,7 +81,7 @@
 			
 			$entries = Get-VmoGuestConfiguration | Where-Object Identity -In $Name | Microsoft.PowerShell.Utility\Select-Object -ExcludeProperty ConfigType -Property *
 			
-			foreach ($nameEntry in $Name | Where-Object { $_ -notin $entries.Identity }) {
+			foreach ($nameEntry in $Name | Where-Object { $_ -notin $entries.Identity } | Remove-PSFNull) {
 				Write-PSFMessage -Level Warning -String 'New-VmoVirtualMachine.GuestConfig.NotFound' -StringValues $nameEntry -FunctionName New-VmoVirtualMachine
 			}
 			foreach ($entry in $entries) {
@@ -104,10 +104,10 @@
 			}
 			
 			$networkParam = @{ }
-			if ($Network.SubnetMask) { $networkParam.SubnetMask = $Network.SubnetMask }
+			if ($Network.PrefixLength) { $networkParam.PrefixLength = $Network.PrefixLength }
 			if ($Network.DefaultGateway) { $networkParam.DefaultGateway = $Network.DefaultGateway }
 			if ($Network.DnsServer) { $networkParam.DnsServer = $Network.DnsServer }
-			if ($BoundParameters.SubnetMask) { $networkParam.SubnetMask = $BoundParameters.SubnetMask }
+			if ($BoundParameters.PrefixLength) { $networkParam.PrefixLength = $BoundParameters.PrefixLength }
 			if ($BoundParameters.DefaultGateway) { $networkParam.DefaultGateway = $BoundParameters.DefaultGateway }
 			if ($BoundParameters.DnsServer) { $networkParam.DnsServer = $BoundParameters.DnsServer }
 			if ($BoundParameters.IPAddress) { $networkParam.IPAddress = $BoundParameters.IPAddress }
@@ -178,15 +178,15 @@
 		$seed = Get-Random
 		
 		$resolvedConfiguration = Resolve-Configuration -Name (@($templateData.GuestConfig) + $GuestConfiguration) -Disks $hwProfile._Disks -Network $networkData -BoundParameters $PSBoundParameters
-		$guestConfigData = New-ConfigurationVhdx -Seed $seed -Configuration $resolvedConfiguration
+		$guestConfigData = New-ConfigurationVhdx -Seed $seed -Configuration $resolvedConfiguration -ComputerName $ComputerName
 		$guestConfigVhdx = Publish-ScvmmVhdx -GuestVhdxConfig $guestConfigData
 		
 		$jobGroup = [System.Guid]::NewGuid()
-		New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN 0 -JobGroup $jobGroup -CreateDiffDisk $false -VirtualHardDisk $vhdx -FileName "$($Name)_$($DiskName)" -VolumeType BootAndSystem
+		New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN 0 -JobGroup $jobGroup -CreateDiffDisk $false -VirtualHardDisk $vhdx -FileName "$($Name)_$($DiskName)" -VolumeType BootAndSystem -ErrorAction Stop
 		foreach ($disk in ($resolvedConfiguration | Where-Object Action -EQ disk).Parameters) {
-			New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN $disk.Lun -JobGroup $jobGroup -VirtualHardDiskFormatType VHDX -VirtualHardDiskSizeMB ($disk.Size / 1mb) -Dynamic -VolumeType None -FileName "$($seed)-$($Name)-$($disk.Letter).vhdx"
+			New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN $disk.Lun -JobGroup $jobGroup -VirtualHardDiskFormatType VHDX -VirtualHardDiskSizeMB ($disk.Size / 1mb) -Dynamic -VolumeType None -FileName "$($seed)-$($Name)-$($disk.Letter).vhdx" -ErrorAction Stop
 		}
-		New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN (Get-PSFConfigValue -FullName 'VMDeploy.Orchestrator.GuestConfig.Disk.LunID') -JobGroup $jobGroup -CreateDiffDisk $false -VirtualHardDisk $guestConfigVhdx -FileName "$($Name)_$($guestConfigData.Name)" -VolumeType None
+		New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN (Get-PSFConfigValue -FullName 'VMDeploy.Orchestrator.GuestConfig.Disk.LunID') -JobGroup $jobGroup -CreateDiffDisk $false -VirtualHardDisk $guestConfigVhdx -FileName "$($Name)_$($guestConfigData.Name)" -VolumeType None -ErrorAction Stop
 		
 		$templateObject = New-SCVMTemplate -Name "TMP_$($Name)_$($seed)" -HardwareProfile $hwProfile -GuestOSProfile $osProfile -JobGroup $jobGroup
 		if (-not $vmHostObject) {
