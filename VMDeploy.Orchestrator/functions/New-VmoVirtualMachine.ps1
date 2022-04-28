@@ -117,6 +117,18 @@
 				Action   = 'network'
 				Parameters = $networkParam
 			}
+
+			# ComputerName Config
+			$computerName = $BoundParameters.Name
+			if ($BoundParameters.ComputerName) { $computerName = $BoundParameters.ComputerName }
+			[PSCustomObject]@{
+				Identity = '__ComputerName'
+				Weight = 0
+				Action = 'Computername'
+				Parameters = @{
+					Name = $computerName
+				}
+			}
 		}
 		#endregion Functions
 	}

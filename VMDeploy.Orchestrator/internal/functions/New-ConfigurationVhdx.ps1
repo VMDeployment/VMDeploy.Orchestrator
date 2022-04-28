@@ -122,6 +122,12 @@
 		$ComputerName | Export-PSFClixml -Path "$workingDirectory\Resources\__computername.dat"
 		#endregion Process Configuration & Resources
 		
+		#region Add Additional Content Files
+		foreach ($file in Get-ChildItem -Path "$script:ModuleRoot\internal\content\*.ps1") {
+			Copy-Item -Path $file.FullName -Destination $workingDirectory
+		}
+		#endregion Add Additional Content Files
+
 		#region Wrapping up and reporting
 		$vhdxPath = "$workingDirectory\VMDeploy_OSConfig-$($Seed).vhdx"
 		Invoke-PSFProtectedCommand -ActionString 'New-ConfigurationVhdx.Vhdx.Create' -ActionStringValues $vhdxPath -Target $Seed -ScriptBlock {
