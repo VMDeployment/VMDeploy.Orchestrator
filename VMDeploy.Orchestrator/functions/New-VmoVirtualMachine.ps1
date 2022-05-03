@@ -154,6 +154,11 @@
 		if (-not $Network) { $Network = $templateData.Network }
 		
 		if (-not $ComputerName) { $ComputerName = $Name }
+
+		if ($templateData.Shielding) {
+			$unattendFile = @(Get-VmoShieldingUnattendFile -Name $templateData.Shielding)[0]
+			if (-not $unattendFile) { throw "No shielding unattend file found for shielding config $($templateData.Shielding)" }
+		}
 		#endregion Process Template
 		
 		#region Retrieve and validate resource access
@@ -201,10 +206,27 @@
 		New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN (Get-PSFConfigValue -FullName 'VMDeploy.Orchestrator.GuestConfig.Disk.LunID') -JobGroup $jobGroup -CreateDiffDisk $false -VirtualHardDisk $guestConfigVhdx -FileName "$($Name)_$($guestConfigData.Name)" -VolumeType None -ErrorAction Stop
 		
 		$templateObject = New-SCVMTemplate -Name "TMP_$($Name)_$($seed)" -HardwareProfile $hwProfile -GuestOSProfile $osProfile -JobGroup $jobGroup
+		$newVMParam = @{
+			StartVM = $true
+			ReturnImmediately = $true
+			Name = $ComputerName
+		}
+		#region Shielding
+		if ($templateData.Shielding) {
+			$tempPdkFile = Join-Path -Path (Get-PSFPath -Name temp) -ChildPath "shielding_$($seed).pdk"
+			try { $fileObject = New-PdkFile -Path $tempPdkFile -OSVhdxPath $whatever -AnswerFile $unattendFile.FilePath }
+			catch {
+				Write-PSFMessage -Level Warning -Message "Failed to create Shielding Data File (.pdk)" -ErrorRecord $_
+				throw
+			}
+			$newVMParam['VMShieldingData'] = $fileObject
+		}
+		#endregion Shielding
+
 		if (-not $vmHostObject) {
 			Write-PSFMessage -Message 'Deploying VM {0} to {1}{2}' -StringValues $Name, $cloudObject.Name, $hostGroupObject.Name
 			$configuration = New-SCVMConfiguration -VMTemplate $templateObject -Name "CFG_$($Name)_$($seed)" @configParam
-			New-SCVirtualMachine -VMConfiguration $configuration -Name $ComputerName -StartVM -ReturnImmediately
+			New-SCVirtualMachine @newVMParam -VMConfiguration $configuration
 		}
 		else {
 			$vmPath = $null
@@ -212,7 +234,7 @@
 			if (-not $vmPath) { $vmPath = $vmHostObject.VMPaths | Get-Random }
 			
 			Write-PSFMessage -Message 'Deploying VM {0} to {1} at {2}' -StringValues $Name, $vmHostObject.Name, $vmPath
-			New-SCVirtualMachine -VMTemplate $templateObject -VMHost $vmHostObject -Path $vmPath -Name $ComputerName -StartVM -ReturnImmediately
+			New-SCVirtualMachine -VMTemplate $templateObject -VMHost $vmHostObject -Path $vmPath
 		}
 		
 		
@@ -221,5 +243,6 @@
 		$timeLimit = Get-PSFConfigValue -FullName 'VMDeploy.Orchestrator.Template.ExpirationDays'
 		$null = Get-SCVMTemplate | Where-Object Name -Like TMP_* | Where-Object AddedTime -LT (Get-Date).AddDays((-1 * $timeLimit)) | Remove-SCVMTemplate
 		$null = Get-SCVirtualHardDisk | Where-Object Name -like "VMDeploy_OSConfig-*.vhdx" | Where-Object AddedTime -lt (Get-Date).AddDays((-1 * $timeLimit)) | Remove-SCVirtualHardDisk
+		if ($tempPdkFile) { Remove-Item -Path $tempPdkFile -Force -ErrorAction Ignore }
 	}
 }

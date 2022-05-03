@@ -48,6 +48,7 @@
         'Get-VmoGuestOSProfile'
         'Get-VmoHardwareProfile'
         'Get-VmoNetwork'
+		'Get-VmoShieldingUnattendFile'
         'Get-VmoTemplate'
 		'Get-VmoVirtualHardDisk'
 		'Get-VmoVMHost'

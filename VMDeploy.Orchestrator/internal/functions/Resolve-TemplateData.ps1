@@ -33,8 +33,9 @@
 		$coreProperties = @(
 			'Cloud'
 			'GuestOSProfile'
-			'Network'
 			'HardwareProfile'
+			'Network'
+			'Shielding'
 			'VirtualHardDisk'
 		)
 	}
