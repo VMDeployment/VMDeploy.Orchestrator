@@ -159,6 +159,7 @@
 			$unattendFile = @(Get-VmoShieldingUnattendFile -Name $templateData.Shielding)[0]
 			if (-not $unattendFile) { throw "No shielding unattend file found for shielding config $($templateData.Shielding)" }
 		}
+		Write-PSFMessage -Message "HWP: $HardwareProfile | OSP: $GuestOSProfile | Target: $($Cloud)$($VMHostGroup)$($VMHost) | Disk: $DiskName | Network: $Network | Name: $ComputerName | Shield: $($templateData.Shielding)"
 		#endregion Process Template
 		
 		#region Retrieve and validate resource access
@@ -205,7 +206,7 @@
 		}
 		New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN (Get-PSFConfigValue -FullName 'VMDeploy.Orchestrator.GuestConfig.Disk.LunID') -JobGroup $jobGroup -CreateDiffDisk $false -VirtualHardDisk $guestConfigVhdx -FileName "$($Name)_$($guestConfigData.Name)" -VolumeType None -ErrorAction Stop
 		
-		$templateObject = New-SCVMTemplate -Name "TMP_$($Name)_$($seed)" -HardwareProfile $hwProfile -GuestOSProfile $osProfile -JobGroup $jobGroup
+		$templateObject = New-SCVMTemplate -Name "TMP_$($Name)_$($seed)" -HardwareProfile $hwProfile -GuestOSProfile $osProfile -JobGroup $jobGroup -Shielded ($templateData.Shielding -as [bool])
 		$newVMParam = @{
 			StartVM = $true
 			ReturnImmediately = $true
@@ -214,7 +215,7 @@
 		#region Shielding
 		if ($templateData.Shielding) {
 			$tempPdkFile = Join-Path -Path (Get-PSFPath -Name temp) -ChildPath "shielding_$($seed).pdk"
-			try { $fileObject = New-PdkFile -Path $tempPdkFile -OSVhdxPath $whatever -AnswerFile $unattendFile.FilePath }
+			try { $fileObject = New-PdkFile -Path $tempPdkFile -OSVhdxPath $vhdx.Location -AnswerFile $unattendFile.FilePath }
 			catch {
 				Write-PSFMessage -Level Warning -Message "Failed to create Shielding Data File (.pdk)" -ErrorRecord $_
 				throw
