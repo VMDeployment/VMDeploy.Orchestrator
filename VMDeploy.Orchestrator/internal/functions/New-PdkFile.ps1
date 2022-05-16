@@ -40,10 +40,8 @@
 			Policy                = 'Shielded'
 		}
 		New-ShieldingDataFile @param
-		#[Microsoft.SystemCenter.VirtualMachineManager.KeyFile]::LoadFrom($Path, (Split-Path -Path $Path -Leaf), "___", $Null)
 
 		New-SCVMShieldingData -Name "VMDeploy-$(Split-Path -Path $Path -Leaf)" -VMShieldingDataPath $Path -Description "VMDeploy $(Split-Path -Path $Path -Leaf) - $(Get-Date -Format yyyy-MM-dd)"
-		#Get-SCVMShieldingData #TODO: at filtering
 		
 		# Cleanup Temp Folder
 		Remove-Item -Path $tempFolder -Recurse -Force -ErrorAction Ignore
