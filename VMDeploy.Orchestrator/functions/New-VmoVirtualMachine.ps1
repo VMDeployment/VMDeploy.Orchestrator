@@ -2,6 +2,7 @@
 	[CmdletBinding(DefaultParameterSetName = 'Default')]
 	param (
 		[Parameter(Mandatory = $true)]
+		[PsfValidateScript('VMDeploy.Orchestrator.ComputerName.Length', ErrorString = 'VMDeploy.Orchestrator.Validate.ComputerName.Length')]
 		[string]
 		$Name,
 		
@@ -53,6 +54,7 @@
 		[string]
 		$DefaultGateway,
 		
+		[PsfValidateScript('VMDeploy.Orchestrator.ComputerName.Length', ErrorString = 'VMDeploy.Orchestrator.Validate.ComputerName.Length')]
 		[string]
 		$ComputerName,
 		
@@ -134,6 +136,16 @@
 	}
 	process {
 		$configParam = @{ }
+		Start-VmoDeployment -Name $Name -BoundParameters $PSBoundParameters
+		
+		$seed = Get-Random
+		Write-VmoDeploymentData -Name Seed -Data $seed -Comment "Deployment Seed, usually associated with temp files for this workflow"
+
+		trap {
+			Write-VmoDeploymentData -Name Failed -Data $_
+			Stop-VmoDeployment -State Failed
+			throw $_
+		}
 		
 		#region Process Template
 		$templateData = Resolve-TemplateData -Name $Template
@@ -157,6 +169,7 @@
 
 		if ($templateData.Shielding) {
 			$unattendFile = @(Get-VmoShieldingUnattendFile -Name $templateData.Shielding)[0]
+			$unattendFilePath = Convert-ShieldingUnattendFile -UnattendFile $unattendFile -Seed $seed
 			if (-not $unattendFile) { throw "No shielding unattend file found for shielding config $($templateData.Shielding)" }
 		}
 		Write-PSFMessage -Message "HWP: $HardwareProfile | OSP: $GuestOSProfile | Target: $($Cloud)$($VMHostGroup)$($VMHost) | Disk: $DiskName | Network: $Network | Name: $ComputerName | Shield: $($templateData.Shielding)"
@@ -164,9 +177,9 @@
 		
 		#region Retrieve and validate resource access
 		$hwProfile = Get-VmoHardwareProfile -NoCache | Where-Object Name -EQ $HardwareProfile
-		if (-not $hwProfile) { throw "Unable to find Hardware Profile $hwProfile! Ensure it exists and you have the permission to use it." }
+		if (-not $hwProfile) { throw "Unable to find Hardware Profile $HardwareProfile! Ensure it exists and you have the permission to use it." }
 		$osProfile = Get-VmoGuestOSProfile | Where-Object Name -EQ $GuestOSProfile
-		if (-not $osProfile) { throw "Unable to find Guest OS Profile $osProfile! Ensure it exists and you have the permission to use it." }
+		if (-not $osProfile) { throw "Unable to find Guest OS Profile $GuestOSProfile! Ensure it exists and you have the permission to use it." }
 		if ($Cloud) {
 			$cloudObject = Get-VmoCloud | Where-Object Name -EQ $Cloud
 			if (-not $cloudObject) { throw "Unable to find cloud $Cloud! Ensure it exists and you have the permission to use it." }
@@ -193,8 +206,6 @@
 		$networkData = Get-VmoNetwork | Where-Object Name -EQ $Network | Microsoft.PowerShell.Utility\Select-Object -First 1
 		#endregion Retrieve and validate resource access
 		
-		$seed = Get-Random
-		
 		$resolvedConfiguration = Resolve-Configuration -Name (@($templateData.GuestConfig) + $GuestConfiguration) -Disks $hwProfile._Disks -Network $networkData -BoundParameters $PSBoundParameters
 		$guestConfigData = New-ConfigurationVhdx -Seed $seed -Configuration $resolvedConfiguration -ComputerName $ComputerName
 		$guestConfigVhdx = Publish-ScvmmVhdx -GuestVhdxConfig $guestConfigData
@@ -215,7 +226,7 @@
 		#region Shielding
 		if ($templateData.Shielding) {
 			$tempPdkFile = Join-Path -Path (Get-PSFPath -Name temp) -ChildPath "shielding_$($seed).pdk"
-			try { $fileObject = New-PdkFile -Path $tempPdkFile -OSVhdxPath $vhdx.Location -AnswerFile $unattendFile.FilePath }
+			try { $fileObject = New-PdkFile -Path $tempPdkFile -OSVhdxPath $vhdx.Location -AnswerFile $unattendFilePath }
 			catch {
 				Write-PSFMessage -Level Warning -Message "Failed to create Shielding Data File (.pdk)" -ErrorRecord $_
 				throw
@@ -235,7 +246,7 @@
 			if (-not $vmPath) { $vmPath = $vmHostObject.VMPaths | Get-Random }
 			
 			Write-PSFMessage -Message 'Deploying VM {0} to {1} at {2}' -StringValues $Name, $vmHostObject.Name, $vmPath
-			New-SCVirtualMachine -VMTemplate $templateObject -VMHost $vmHostObject -Path $vmPath
+			New-SCVirtualMachine @newVMParam -VMTemplate $templateObject -VMHost $vmHostObject -Path $vmPath
 		}
 		
 		
@@ -245,5 +256,9 @@
 		$null = Get-SCVMTemplate | Where-Object Name -Like TMP_* | Where-Object AddedTime -LT (Get-Date).AddDays((-1 * $timeLimit)) | Remove-SCVMTemplate
 		$null = Get-SCVirtualHardDisk | Where-Object Name -like "VMDeploy_OSConfig-*.vhdx" | Where-Object AddedTime -lt (Get-Date).AddDays((-1 * $timeLimit)) | Remove-SCVirtualHardDisk
 		if ($tempPdkFile) { Remove-Item -Path $tempPdkFile -Force -ErrorAction Ignore }
+		if ($unattendFilePath) { Remove-Item -Path $unattendFilePath -Force -ErrorAction Ignore }
+
+		Wait-PSFMessage
+		Stop-VmoDeployment -State Success
 	}
 }

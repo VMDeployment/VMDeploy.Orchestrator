@@ -31,11 +31,15 @@
 		try { $guardian = Get-VMManGuardedFabric }
 		catch { throw }
 
+		# The parametername for unattend answer files changes between Server 2016 & 2019
+		$unattendParamName = 'WindowsUnattendFile'
+		if ((Get-Command New-ShieldingDataFile).Parameters.Keys -contains 'AnswerFile') { $unattendParamName = 'AnswerFile' }
+		
 		$param = @{
 			ShieldingDataFilePath = $Path
 			Owner                 = $owner
 			VolumeIDQualifier     = New-VolumeIDQualifier -VolumeSignatureCatalogFilePath $vscPath -VersionRule Equals
-			AnswerFile            = $AnswerFile
+			$unattendParamName    = $AnswerFile
 			Guardian              = $guardian
 			Policy                = 'Shielded'
 		}

@@ -18,3 +18,4 @@ Set-PSFConfig -Module 'VMDeploy.Orchestrator' -Name 'Scvmm.LibraryPath' -Value '
 Set-PSFConfig -Module 'VMDeploy.Orchestrator' -Name 'Template.ExpirationDays' -Value 1 -Initialize -Validation integerpositive -Description 'Maximum age after which all temporary VM templates are deleted when creating a new Virtual Machine. Temporary templates are identified by their "TMP_*" prefix.'
 
 Set-PSFConfig -Module 'VMDeploy.Orchestrator' -Name 'GuestConfig.Disk.LunID' -Value 63 -Initialize -Validation integerpositive -Description 'The ID under which the Guest Configuration Disk will be mounted. The Hardware profile must not use this ID'
+Set-PSFConfig -Module 'VMDeploy.Orchestrator' -Name 'DynamicConfiguration.PreferLocal' -Value $true -Initialize -Validation bool -Description 'When resolving dynamic configuration items, prefer either the current set of templates or all nested templates.'

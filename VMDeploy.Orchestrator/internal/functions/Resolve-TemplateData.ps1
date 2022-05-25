@@ -26,7 +26,10 @@
 		$Name,
 		
 		[hashtable]
-		$Data = @{ }
+		$Data = @{ },
+
+		[System.Collections.Generic.List[string]]
+		$AllTemplates = [System.Collections.Generic.List[string]]::new()
 	)
 	
 	begin {
@@ -40,6 +43,11 @@
 		)
 	}
 	process {
+		$dynamicGuestOSProfile = $false
+		$dynamicHardwareProfile = $false
+
+		$localTemplates = [System.Collections.Generic.List[string]]::new()
+
 		foreach ($entry in $Name) {
 			$templateObjects = Get-VmoTemplate -Name $entry
 			if (-not $templateObjects) {
@@ -56,13 +64,36 @@
 					if (-not $Data.GuestConfig) { $Data.GuestConfig = $templateObject.GuestConfig }
 					else { $Data.GuestConfig = @($Data.GuestConfig) + @($templateObject.GuestConfig) }
 				}
+
+				if ($null -ne $templateObject.DynamicGuestOSProfile) {
+					$dynamicGuestOSProfile = $templateObject.DynamicGuestOSProfile
+				}
+				if ($null -ne $templateObject.DynamicHardwareProfile) {
+					$dynamicHardwareProfile = $templateObject.DynamicHardwareProfile
+				}
 				
-				foreach ($templateName in $templateObject.ChildTemplates) {
-					Resolve-TemplateData -Name $templateName -Data $Data
+				if ($templateObject.ChildTemplates) {
+					$null = Resolve-TemplateData -Name $templateObject.ChildTemplates -Data $Data -AllTemplates $AllTemplates
 				}
 			}
+			foreach ($templateObject in $templateObjects) {
+				$AllTemplates.Add($templateObject.Name)
+				$localTemplates.Add($templateObject.Name)
+			}
+		}
+
+		if ($dynamicGuestOSProfile) {
+			$osProfile = Resolve-GuestOSProfile -AllTemplates $AllTemplates -LocalTemplates $localTemplates
+			if ($osProfile) { $Data.GuestOSProfile = $osProfile.Name }
+		}
+		if ($dynamicHardwareProfile) {
+			$hwProfile = Resolve-HardwareProfile -AllTemplates $AllTemplates -LocalTemplates $localTemplates
+			if ($hwProfile) { $Data.HardwareProfile = $hwProfile.Name }
 		}
 		
+		if (-not $PSBoundParameters.ContainsKey('Data')) {
+			Write-VmoDeploymentData -Name 'TemplatesResolved' -Data $AllTemplates -Comment 'List of all templates applied to the deployment'
+		}
 		if ($Data.GuestConfig) { $Data.GuestConfig = $Data.GuestConfig | Remove-PSFNull | Sort-Object -Unique }
 		$Data
 	}
