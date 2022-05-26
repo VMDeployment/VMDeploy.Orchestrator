@@ -17,7 +17,7 @@
 	}
 	process {
 		foreach ($identity in $ID) {
-			Remove-Item -LiteralPath "$deploymentDataPath\$identity.clidat"
+			Remove-Item -LiteralPath "$deploymentDataPath\$identity.clidat" -ErrorAction Ignore -Force
 		}
 	}
 }

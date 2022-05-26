@@ -7,7 +7,7 @@
 	
 	process
 	{
-		if (-not $script:deploymentDatav.Name) { return 'NotStarted' }
+		if (-not $script:deploymentData.Name) { return 'NotStarted' }
 		'Started'
 	}
 }

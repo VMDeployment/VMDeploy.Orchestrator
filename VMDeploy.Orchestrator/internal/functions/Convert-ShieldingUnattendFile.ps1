@@ -48,7 +48,7 @@
 	#region Local Admin Password
 	if ($fileContent -like '*%!adminpassword!%*') {
 		$newPassword = New-Password
-		$fileContent = $fileContent.Replace('%!adminpassword!%', $newPassword, 'OrdinalIgnoreCase')
+		$fileContent = $fileContent.Replace('%!adminpassword!%', $newPassword)
 		Write-VmoDeploymentData -Name 'LocalAdminPassword' -Data ($newPassword | ConvertTo-SecureString -AsPlainText -Force)
 	}
 	#endregion Local Admin Password
@@ -56,4 +56,5 @@
 	#endregion Process
 
 	[System.IO.File]::WriteAllText($tempFilePath, $fileContent)
+	$tempFilePath
 }
