@@ -213,6 +213,7 @@
 		$jobGroup = [System.Guid]::NewGuid()
 		New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN 0 -JobGroup $jobGroup -CreateDiffDisk $false -VirtualHardDisk $vhdx -FileName "$($Name)_$($DiskName)" -VolumeType BootAndSystem -ErrorAction Stop
 		foreach ($disk in ($resolvedConfiguration | Where-Object Action -EQ disk).Parameters) {
+			if ($disk.Lun -eq 0) { continue }
 			New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN $disk.Lun -JobGroup $jobGroup -VirtualHardDiskFormatType VHDX -VirtualHardDiskSizeMB ($disk.Size / 1mb) -Dynamic -VolumeType None -FileName "$($seed)-$($Name)-$($disk.Letter).vhdx" -ErrorAction Stop
 		}
 		New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN (Get-PSFConfigValue -FullName 'VMDeploy.Orchestrator.GuestConfig.Disk.LunID') -JobGroup $jobGroup -CreateDiffDisk $false -VirtualHardDisk $guestConfigVhdx -FileName "$($Name)_$($guestConfigData.Name)" -VolumeType None -ErrorAction Stop
