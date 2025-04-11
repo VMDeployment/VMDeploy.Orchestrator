@@ -99,7 +99,10 @@ if ($EnableAllDisks) {
 }
 else {
 	$disk = Get-Disk | Where-Object Location -Match "LUN $ConfigLun" | Where-Object OperationalStatus -EQ 'Offline'
-	if ($disk) { $disk | Set-Disk -IsOffline $false }
+	if ($disk) {
+		$disk | Set-Disk -IsOffline $false
+		$disk | Set-Disk -IsReadOnly $false
+	}
 }
 Start-Sleep -Seconds 1
 $volumes = Get-Volume

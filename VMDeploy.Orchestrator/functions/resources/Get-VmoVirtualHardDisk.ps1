@@ -6,6 +6,10 @@
     .DESCRIPTION
         Read the list of available virtualHardDisks in the connected SCVMM.
         Only returns virtualHardDisks the current user has access to, based on his/her/its role membership.
+
+	.PARAMETER VmmServer
+		Der SCVMM Server to connect to.
+		If not specified, it will use the SCVMM used for the last deployment (if any) or the default server (otherwise)
     
     .PARAMETER NoCache
         Disable the user role cache.
@@ -19,11 +23,25 @@
     #>
     [CmdletBinding()]
     param (
-        [switch]
+        [string]
+		$VmmServer,
+
+		[switch]
         $NoCache
     )
 
-    process {
+    begin {
+		if ($VmmServer) {
+			$vmmServerObject = Get-VMManSCVMM | Where-Object Name -EQ $VmmServer
+			if (-not $vmmServerObject) { throw "Unable to find SCVMM Server $($VmmServer)! Ensure it exists and you have the permission to deploy to it." }
+			try { $Null = Get-SCVMMServer -ComputerName $vmmServerObject.Server -ErrorAction Stop }
+			catch {
+				Write-Warning "Failed to access SCVMM Server $($vmmServerObject.Name) | $($vmmServerObject.Server): $_"
+				throw
+			}
+		}
+	}
+	process {
         $config = Get-VMManConfiguration -Type VirtualHardDisk
         $userRoles = Get-UserRole -NoCache:$NoCache
         $virtualHardDisks = Get-SCVirtualHardDisk

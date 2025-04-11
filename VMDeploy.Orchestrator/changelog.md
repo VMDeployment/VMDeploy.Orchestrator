@@ -2,6 +2,7 @@
 
 ## ???
 
++ Major: Redesign to support multiple SCVMM Servers
 + New: Compontent DeploymentData - Gather and persist information for individual deployments
 + New: Command Get-VmoDynamicGuestOSProfile - Retrieve dynamically configured GuestOSProfiles
 + New: Command Get-VmoDynamicHardwareProfile - Retrieve dynamically configured Hardware Profiles

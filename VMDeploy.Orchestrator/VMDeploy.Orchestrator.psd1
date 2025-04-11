@@ -3,7 +3,7 @@
 	RootModule        = 'VMDeploy.Orchestrator.psm1'
 	
 	# Version number of this module.
-	ModuleVersion     = '1.0.0'
+	ModuleVersion     = '1.1.0'
 	
 	# ID used to uniquely identify this module
 	GUID              = '7855caf0-2e89-4ea2-a770-2c0d11dfc9c7'

@@ -26,7 +26,7 @@
 		$Name,
 		
 		[hashtable]
-		$Data = @{ },
+		$Data = @{ VMMServer = 'Default' },
 
 		[System.Collections.Generic.List[string]]
 		$AllTemplates = [System.Collections.Generic.List[string]]::new()
@@ -40,6 +40,7 @@
 			'Network'
 			'Shielding'
 			'VirtualHardDisk'
+			'VMMServer'
 		)
 	}
 	process {

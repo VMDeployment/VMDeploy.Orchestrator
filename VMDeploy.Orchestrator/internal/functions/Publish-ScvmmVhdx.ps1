@@ -1,21 +1,18 @@
-﻿function Publish-ScvmmVhdx
-{
+﻿function Publish-ScvmmVhdx {
 	[CmdletBinding()]
 	Param (
-		$GuestVhdxConfig
+		$GuestVhdxConfig,
+
+		[string]
+		$LibraryShare
 	)
 	
-	begin
-	{
-		$libraryShare = Get-PSFConfigValue -FullName 'VMDeploy.Orchestrator.Scvmm.LibraryPath'
-	}
-	process
-	{
-		Copy-Item -Path $GuestVhdxConfig.Path -Destination (Join-Path -Path $libraryShare -ChildPath VHDs)
+	process {
+		Copy-Item -Path $GuestVhdxConfig.Path -Destination (Join-Path -Path $LibraryShare -ChildPath VHDs)
 		Remove-Item -Path $GuestVhdxConfig.WorkingDirectory -Recurse -Force
 		
 		# Refresh Library so it detects the new disk
-		$null = Get-SCLibraryShare | Where-Object Path -eq $libraryShare | Read-SCLibraryShare
+		$null = Get-SCLibraryShare | Where-Object Path -EQ $LibraryShare | Read-SCLibraryShare
 		
 		Get-SCVirtualHardDisk -Name $GuestVhdxConfig.VmmName
 	}

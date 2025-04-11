@@ -59,7 +59,10 @@
 		$ComputerName,
 		
 		[string[]]
-		$GuestConfiguration
+		$GuestConfiguration,
+
+		[string]
+		$VmmServer
 	)
 	
 	begin {
@@ -98,9 +101,9 @@
 			
 			foreach ($disk in $Disks) {
 				[PSCustomObject]@{
-					Identity = "__Disk_$($disk.Letter)_$($disk.LUN)"
-					Weight   = -1
-					Action   = 'disk'
+					Identity   = "__Disk_$($disk.Letter)_$($disk.LUN)"
+					Weight     = -1
+					Action     = 'disk'
 					Parameters = $disk
 				}
 			}
@@ -114,9 +117,9 @@
 			if ($BoundParameters.DnsServer) { $networkParam.DnsServer = $BoundParameters.DnsServer }
 			if ($BoundParameters.IPAddress) { $networkParam.IPAddress = $BoundParameters.IPAddress }
 			[PSCustomObject]@{
-				Identity = '__Network'
-				Weight   = -2
-				Action   = 'network'
+				Identity   = '__Network'
+				Weight     = -2
+				Action     = 'network'
 				Parameters = $networkParam
 			}
 
@@ -124,9 +127,9 @@
 			$computerName = $BoundParameters.Name
 			if ($BoundParameters.ComputerName) { $computerName = $BoundParameters.ComputerName }
 			[PSCustomObject]@{
-				Identity = '__ComputerName'
-				Weight = 0
-				Action = 'Computername'
+				Identity   = '__ComputerName'
+				Weight     = 0
+				Action     = 'Computername'
 				Parameters = @{
 					Name = $computerName
 				}
@@ -149,6 +152,8 @@
 		
 		#region Process Template
 		$templateData = Resolve-TemplateData -Name $Template
+		# VMM Server
+		if (-not $VmmServer) { $VmmServer = $templateData.VmmServer }
 		# Hardware Profile
 		if (-not $HardwareProfile) { $HardwareProfile = $templateData.HardwareProfile }
 		if (-not $HardwareProfile) { throw "Hardware profile not specified! Use a template or specify the -HardwareProfile parameter!" }
@@ -176,6 +181,14 @@
 		#endregion Process Template
 		
 		#region Retrieve and validate resource access
+		$vmmServerObject = Get-VMManSCVMM | Where-Object Name -EQ $VmmServer
+		if (-not $vmmServerObject) { throw "Unable to find SCVMM Server $($VmmServer)! Ensure it exists and you have the permission to deploy to it." }
+		try { $Null = Get-SCVMMServer -ComputerName $vmmServerObject.Server -ErrorAction Stop }
+		catch {
+			Write-Warning "Failed to access SCVMM Server $($vmmServerObject.Name) | $($vmmServerObject.Server): $_"
+			throw
+		}
+
 		$hwProfile = Get-VmoHardwareProfile -NoCache | Where-Object Name -EQ $HardwareProfile
 		if (-not $hwProfile) { throw "Unable to find Hardware Profile $HardwareProfile! Ensure it exists and you have the permission to use it." }
 		$osProfile = Get-VmoGuestOSProfile | Where-Object Name -EQ $GuestOSProfile
@@ -208,7 +221,7 @@
 		
 		$resolvedConfiguration = Resolve-Configuration -Name (@($templateData.GuestConfig) + $GuestConfiguration) -Disks $hwProfile._Disks -Network $networkData -BoundParameters $PSBoundParameters
 		$guestConfigData = New-ConfigurationVhdx -Seed $seed -Configuration $resolvedConfiguration -ComputerName $ComputerName
-		$guestConfigVhdx = Publish-ScvmmVhdx -GuestVhdxConfig $guestConfigData
+		$guestConfigVhdx = Publish-ScvmmVhdx -GuestVhdxConfig $guestConfigData -LibraryShare $vmmServerObject.Share
 		
 		$jobGroup = [System.Guid]::NewGuid()
 		New-SCVirtualDiskDrive -SCSI -Bus 0 -LUN 0 -JobGroup $jobGroup -CreateDiffDisk $false -VirtualHardDisk $vhdx -FileName "$($Name)_$($DiskName)" -VolumeType BootAndSystem -ErrorAction Stop
@@ -220,9 +233,9 @@
 		
 		$templateObject = New-SCVMTemplate -Name "TMP_$($Name)_$($seed)" -HardwareProfile $hwProfile -GuestOSProfile $osProfile -JobGroup $jobGroup -Shielded ($templateData.Shielding -as [bool])
 		$newVMParam = @{
-			StartVM = $true
+			StartVM           = $true
 			ReturnImmediately = $true
-			Name = $ComputerName
+			Name              = $ComputerName
 		}
 		#region Shielding
 		if ($templateData.Shielding) {
@@ -255,7 +268,7 @@
 		# Current Template is locked while deploying
 		$timeLimit = Get-PSFConfigValue -FullName 'VMDeploy.Orchestrator.Template.ExpirationDays'
 		$null = Get-SCVMTemplate | Where-Object Name -Like TMP_* | Where-Object AddedTime -LT (Get-Date).AddDays((-1 * $timeLimit)) | Remove-SCVMTemplate
-		$null = Get-SCVirtualHardDisk | Where-Object Name -like "VMDeploy_OSConfig-*.vhdx" | Where-Object AddedTime -lt (Get-Date).AddDays((-1 * $timeLimit)) | Remove-SCVirtualHardDisk
+		$null = Get-SCVirtualHardDisk | Where-Object Name -Like "VMDeploy_OSConfig-*.vhdx" | Where-Object AddedTime -LT (Get-Date).AddDays((-1 * $timeLimit)) | Remove-SCVirtualHardDisk
 		if ($tempPdkFile) { Remove-Item -Path $tempPdkFile -Force -ErrorAction Ignore }
 		if ($unattendFilePath) { Remove-Item -Path $unattendFilePath -Force -ErrorAction Ignore }
 
